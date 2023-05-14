@@ -2,42 +2,20 @@ import pytorch_lightning as pl
 from torch.utils.data.dataloader import DataLoader
 from torchvision import transforms as T
 
-from dataloaders.GSVCitiesDataset import GSVCitiesDataset
-from . import PittsburgDataset
-from . import MapillaryDataset
+from dataloaders.GSVCitiesDataset import GSVCitiesDataset, GSVCitiesValDataset
+# from . import PittsburgDataset
+# from . import MapillaryDataset
 
 from prettytable import PrettyTable
 
-IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
-                     'std': [0.229, 0.224, 0.225]}
+IMAGENET_MEAN_STD = {'mean': [132.99688526536784 / 255], 
+                     'std': [1772.856880201596 ** 0.5 / 255]}
 
 VIT_MEAN_STD = {'mean': [0.5, 0.5, 0.5], 
                 'std': [0.5, 0.5, 0.5]}
 
 TRAIN_CITIES = [
-    'Bangkok',
-    'BuenosAires',
-    'LosAngeles',
-    'MexicoCity',
-    'OSL',
-    'Rome',
-    'Barcelona',
-    'Chicago',
-    'Madrid',
-    'Miami',
-    'Phoenix',
-    'TRT',
-    'Boston',
-    'Lisbon',
-    'Medellin',
-    'Minneapolis',
-    'PRG',
-    'WashingtonDC',
-    'Brussels',
-    'London',
-    'Melbourne',
-    'Osaka',
-    'PRS',
+    'N_0.6'
 ]
 
 
@@ -90,6 +68,7 @@ class GSVCitiesDataModule(pl.LightningDataModule):
             'drop_last': False,
             'pin_memory': True,
             'shuffle': self.shuffle_all}
+            
 
         self.valid_loader_config = {
             'batch_size': self.batch_size,
@@ -104,21 +83,26 @@ class GSVCitiesDataModule(pl.LightningDataModule):
             self.reload()
 
             # load validation sets (pitts_val, msls_val, ...etc)
-            self.val_datasets = []
-            for valid_set_name in self.val_set_names:
-                if valid_set_name.lower() == 'pitts30k_test':
-                    self.val_datasets.append(PittsburgDataset.get_whole_test_set(
-                        input_transform=self.valid_transform))
-                elif valid_set_name.lower() == 'pitts30k_val':
-                    self.val_datasets.append(PittsburgDataset.get_whole_val_set(
-                        input_transform=self.valid_transform))
-                elif valid_set_name.lower() == 'msls_val':
-                    self.val_datasets.append(MapillaryDataset.MSLS(
-                        input_transform=self.valid_transform))
-                else:
-                    print(
-                        f'Validation set {valid_set_name} does not exist or has not been implemented yet')
-                    raise NotImplementedError
+            self.val_datasets = [GSVCitiesValDataset(
+            cities=self.cities,
+            img_per_place=self.img_per_place,
+            min_img_per_place=self.min_img_per_place,
+            random_sample_from_each_place=self.random_sample_from_each_place,
+            transform=self.train_transform)]
+            # for valid_set_name in self.val_set_names:
+            #     if valid_set_name.lower() == 'pitts30k_test':
+            #         self.val_datasets.append(PittsburgDataset.get_whole_test_set(
+            #             input_transform=self.valid_transform))
+            #     elif valid_set_name.lower() == 'pitts30k_val':
+            #         self.val_datasets.append(PittsburgDataset.get_whole_val_set(
+            #             input_transform=self.valid_transform))
+            #     elif valid_set_name.lower() == 'msls_val':
+            #         self.val_datasets.append(MapillaryDataset.MSLS(
+            #             input_transform=self.valid_transform))
+            #     else:
+            #         print(
+            #             f'Validation set {valid_set_name} does not exist or has not been implemented yet')
+            #         raise NotImplementedError
             if self.show_data_stats:
                 self.print_stats()
 
