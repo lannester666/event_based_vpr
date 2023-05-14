@@ -188,8 +188,7 @@ class GSVCitiesValDataset(Dataset):
         df_db = pd.read_csv(self.base_path+'csv/'+'validate_data.csv')
         df_ref = pd.read_csv(self.base_path+'csv/'+'reference_data.csv')
         self.num_references = len(df_ref)
-        concatenated_df = pd.concat([df_ref, df_db])
-        
+        concatenated_df = pd.concat([df_ref, df_db], ignore_index=True, sort=False)
         return concatenated_df
     
     def __getitem__(self, index):
@@ -199,7 +198,6 @@ class GSVCitiesValDataset(Dataset):
         img_name = self.get_img_name(row)
         img_path = self.base_path + img_name
         img = self.image_loader(img_path)
-
         if self.transform is not None:
             img = self.transform(img)
         return img, index

@@ -7,6 +7,12 @@ import utils
 from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule
 from models import helper
 
+import mlflow
+from pytorch_lightning.loggers import MLFlowLogger
+
+
+# mlflow.pytorch.autolog()
+
 
 class VPRModel(pl.LightningModule):
     """This is the main model for Visual Place Recognition
@@ -82,7 +88,6 @@ class VPRModel(pl.LightningModule):
 
     # the forward pass of the lightning model
     def forward(self, x):
-        print(x.shape)
         x = self.ex(x)
         x = self.backbone(x)
         x = self.aggregator(x)
@@ -201,9 +206,7 @@ class VPRModel(pl.LightningModule):
 
         for i, (val_set_name, val_dataset) in enumerate(zip(dm.val_set_names, dm.val_datasets)):
             feats = torch.concat(val_step_outputs[i], dim=0)
-            num_references = val_dataset.q_idx.shape[0]
-            num_queries = len(val_dataset) - num_references
-            q_idx = val_dataset.q_idx
+            num_references = val_dataset.num_references
             positives = val_dataset.label
             r_list = feats[: num_references]
             q_list = feats[num_references:]
@@ -237,7 +240,7 @@ if __name__ == '__main__':
         shuffle_all=False,  # shuffle all images or keep shuffling in-city only
         random_sample_from_each_place=True,
         image_size=(320, 320),
-        num_workers=0,
+        num_workers=32,
         show_data_stats=True,
         # pitts30k_val, pitts30k_test, msls_val
         val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'],
@@ -359,6 +362,7 @@ if __name__ == '__main__':
 
     # ------------------
     # we instanciate a trainer
+    mlf_logger = MLFlowLogger(experiment_name="lightning_logs", tracking_uri="file:./mlruns")
     trainer = pl.Trainer(
         accelerator='gpu', devices=[0],
         # Tensorflow can be used to viz
@@ -367,15 +371,18 @@ if __name__ == '__main__':
         num_sanity_val_steps=0,  # runs a validation step before stating training
         precision=16,  # we use half precision to reduce  memory usage
         max_epochs=800,
-        check_val_every_n_epoch=100,  # run validation every epoch
+        check_val_every_n_epoch=1,  # run validation every epoch
         # we only run the checkpointing callback (you can add more)
         callbacks=[checkpoint_cb],
         # we reload the dataset to shuffle the order
         reload_dataloaders_every_n_epochs=1,
         log_every_n_steps=10,
+        logger=mlf_logger
         # fast_dev_run=True # uncomment or dev mode (only runs a one iteration train and validation, no checkpointing).
     )
 
     # we call the trainer, we give it the model and the datamodule
+    # Train the model
+    
     # Train the model
     trainer.fit(model=model, datamodule=datamodule)
