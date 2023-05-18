@@ -8,6 +8,24 @@ from dataloaders.GSVCitiesDataset import GSVCitiesDataset, GSVCitiesValDataset
 
 from prettytable import PrettyTable
 
+TYPE2LAMBDA = {
+    'resize': lambda **kw: T.Resize(size=kw['size'], interpolation=T.InterpolationMode.BILINEAR),
+    'randaug': lambda **kw: T.RandAugment(num_ops=kw['num_ops'], interpolation=T.InterpolationMode.BILINEAR),
+    'totensor': lambda **kw: T.ToTensor(),
+    'normalize': lambda **kw: T.Normalize(mean=kw['mean'], std=kw['std']),
+    'centercrop': lambda **kw: T.CenterCrop(size=kw['size']),
+    'pad': lambda **kw: T.Pad(size=kw['size'], fill=kw.get('fill', 0))
+}
+
+def build_transform_compose(transforms):
+    to_compose = []
+    for t in transforms:
+        t = TYPE2LAMBDA[t['type']](**t.get('kwargs', {}))
+        to_compose.append(t)
+    return T.Compose(to_compose)
+    
+        
+
 class GSVCitiesDataModule(pl.LightningDataModule):
     def __init__(self,
                  batch_size=32,
@@ -17,13 +35,15 @@ class GSVCitiesDataModule(pl.LightningDataModule):
                  image_size=(480, 640),
                  num_workers=4,
                  show_data_stats=True,
-                 mean_std={},
                  batch_sampler=None,
                  random_sample_from_each_place=True,
                  train_anno=None,
-                 query_anno=None,
-                 ref_anno=None,
-                 base_path=None
+                 query_anno=[],
+                 ref_anno=[],
+                 base_path=None,
+                 train_transform=[],
+                 vals_transforms=[],
+                 train_transform_e=[]
                  ):
         super().__init__()
         self.batch_size = batch_size
@@ -34,8 +54,6 @@ class GSVCitiesDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.batch_sampler = batch_sampler
         self.show_data_stats = show_data_stats
-        self.mean_dataset = mean_std['mean']
-        self.std_dataset = mean_std['std']
         self.random_sample_from_each_place = random_sample_from_each_place
         self.save_hyperparameters() # save hyperparameter with Pytorch Lightening
 
@@ -44,17 +62,10 @@ class GSVCitiesDataModule(pl.LightningDataModule):
         self.ref_anno = ref_anno
         self.base_path = base_path
 
-        self.train_transform = T.Compose([
-            T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset),
-        ])
-
-        self.valid_transform = T.Compose([
-            T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        assert len(query_anno) == len(vals_transforms) == len(ref_anno), 'data not match with transform'
+        self.train_transform = build_transform_compose(train_transform)
+        self.train_transform_e = build_transform_compose(train_transform_e)
+        self.valid_transforms = [build_transform_compose(vals_transform) for vals_transform in vals_transforms]
 
         self.train_loader_config = {
             'batch_size': self.batch_size,
@@ -74,17 +85,16 @@ class GSVCitiesDataModule(pl.LightningDataModule):
     def setup(self, stage):
         if stage == 'fit':
             self.reload()
-
             # load validation sets (pitts_val, msls_val, ...etc)
-            self.val_set_names = ['ShanghaiTech']
+            self.val_set_names = self.query_anno
             self.val_datasets = [GSVCitiesValDataset(
             img_per_place=self.img_per_place,
             min_img_per_place=self.min_img_per_place,
             random_sample_from_each_place=self.random_sample_from_each_place,
             transform=self.train_transform,
             base_path=self.base_path,
-            query_anno=self.query_anno,
-            ref_anno=self.ref_anno)]
+            query_anno=q,
+            ref_anno=r) for q, r in zip(self.query_anno, self.ref_anno)]
             if self.show_data_stats:
                 self.print_stats()
 
@@ -94,6 +104,7 @@ class GSVCitiesDataModule(pl.LightningDataModule):
             min_img_per_place=self.min_img_per_place,
             random_sample_from_each_place=self.random_sample_from_each_place,
             transform=self.train_transform,
+            transform_e=self.train_transform_e,
             base_path=self.base_path,
             train_anno=self.train_anno)
 

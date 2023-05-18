@@ -46,7 +46,9 @@ class VPRModel(pl.LightningModule):
                  loss_name='MultiSimilarityLoss',
                  miner_name='MultiSimilarityMiner',
                  miner_margin=0.1,
-                 faiss_gpu=False
+                 faiss_gpu=False,
+                 one4two=False,
+                 bimod=False
                  ):
         super().__init__()
         self.encoder_arch = backbone_arch
@@ -77,21 +79,36 @@ class VPRModel(pl.LightningModule):
         self.batch_acc = []
 
         self.faiss_gpu = faiss_gpu
-
+        if bimod and not one4two:
+            self.model_i = self.build_model(backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config)
+            self.model_e = self.build_model(backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config)
+        else:
+            self.model_i = self.build_model(backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config)
+            self.model_e = self.model_i
         # ----------------------------------
         # get the backbone and the aggregator
-        self.ex = torch.nn.Conv2d(1, 3, 1, bias=False)
-        self.ex.weight = torch.nn.Parameter(torch.ones(3, 1, 1, 1))
-        self.backbone = helper.get_backbone(
-            backbone_arch, pretrained, layers_to_freeze, layers_to_crop)
-        self.aggregator = helper.get_aggregator(agg_arch, agg_config)
+       
 
+    def build_model(self, backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config):
+        ex = torch.nn.Conv2d(1, 3, 1, bias=False)
+        ex.weight = torch.nn.Parameter(torch.ones(3, 1, 1, 1))
+        backbone = helper.get_backbone(
+            backbone_arch, pretrained, layers_to_freeze, layers_to_crop)
+        aggregator = helper.get_aggregator(agg_arch, agg_config)
+        return torch.nn.Sequential(ex, backbone, aggregator)
+    
     # the forward pass of the lightning model
-    def forward(self, x):
-        x = self.ex(x) # channel expand for resnet input
-        x = self.backbone(x)
-        x = self.aggregator(x)
-        return x
+    def forward(self, *x):
+        if len(x) == 1:
+            x = x[0]
+            BS, N, ch, h, w = x.shape
+            x = x.view(BS*N, ch, h, w)
+            return self.model_i(x)
+        else:
+            BS, N, ch, h, w = x[0].shape
+            x0 = x[0].view(BS*N, ch, h, w)
+            x1 = x[1].view(BS*N, ch, h, w)
+            return self.model_i(x0), self.model_e(x1)
 
     # configure the optimizer
     def configure_optimizers(self):
@@ -130,26 +147,39 @@ class VPRModel(pl.LightningModule):
     #  The loss function call (this method will be called at each training iteration)
     def loss_function(self, descriptors, labels):
         # we mine the pairs/triplets if there is an online mining strategy
-        if self.miner is not None:
-            miner_outputs = self.miner(descriptors, labels)
-            loss = self.loss_fn(descriptors, labels, miner_outputs)
+        if isinstance(descriptors, torch.Tensor):
+            if self.miner is not None:
+                miner_outputs = self.miner(descriptors, labels)
+                loss = self.loss_fn(descriptors, labels, miner_outputs)
 
-            # calculate the % of trivial pairs/triplets
-            # which do not contribute in the loss value
-            nb_samples = descriptors.shape[0]
-            nb_mined = len(set(miner_outputs[0].detach().cpu().numpy()))
-            batch_acc = 1.0 - (nb_mined/nb_samples)
+                nb_samples = descriptors.shape[0]
+                nb_mined = len(set(miner_outputs[0].detach().cpu().numpy()))
+                batch_acc = 1.0 - (nb_mined/nb_samples)
 
-        else:  # no online mining
-            loss = self.loss_fn(descriptors, labels)
-            batch_acc = 0.0
-            if type(loss) == tuple:
-                # somes losses do the online mining inside (they don't need a miner objet),
-                # so they return the loss and the batch accuracy
-                # for example, if you are developping a new loss function, you might be better
-                # doing the online mining strategy inside the forward function of the loss class,
-                # and return a tuple containing the loss value and the batch_accuracy (the % of valid pairs or triplets)
-                loss, batch_acc = loss
+            else:  # no online mining
+                loss = self.loss_fn(descriptors, labels)
+                batch_acc = 0.0
+                if type(loss) == tuple:
+                    loss, batch_acc = loss
+        else:
+            assert len(descriptors) == 2
+            if self.miner is not None:
+                miner_outputs = self.miner(descriptors[0], labels)
+                loss = self.loss_fn(descriptors[0], labels, miner_outputs)
+                nb_mined = len(set(miner_outputs[0].detach().cpu().numpy()))
+                miner_outputs = self.miner(descriptors[1], labels)
+                loss += self.loss_fn(descriptors[1], labels, miner_outputs)
+
+                nb_samples = descriptors[0].shape[0] * 2
+                nb_mined += len(set(miner_outputs[0].detach().cpu().numpy()))
+                batch_acc = 1.0 - (nb_mined/nb_samples)
+
+            else:  # no online mining
+                loss = self.loss_fn(descriptors[0], labels)
+                loss += self.loss_fn(descriptors[1], labels)
+                batch_acc = 0.0
+                if type(loss) == tuple:
+                    loss, batch_acc = loss
 
         # keep accuracy of every batch and later reset it at epoch start
         self.batch_acc.append(batch_acc)
@@ -160,19 +190,15 @@ class VPRModel(pl.LightningModule):
 
     # This is the training step that's executed at each iteration
     def training_step(self, batch, batch_idx):
-        places, labels = batch
-
-        # Note that GSVCities yields places (each containing N images)
-        # which means the dataloader will return a batch containing BS places
-        BS, N, ch, h, w = places.shape
-
-        # reshape places and labels
-        images = places.view(BS*N, ch, h, w)
+        # places, labels = batch
+        labels = batch[-1]
+        places = batch[:-1]
+        places = (places[0], ) if len(places) == 1 else tuple(places)
         labels = labels.view(-1)
 
         # Feed forward the batch to the model
         # Here we are calling the method forward that we defined above
-        descriptors = self(images)
+        descriptors = self(*places)
         # Call the loss_function we defined above
         loss = self.loss_function(descriptors, labels)
 
@@ -188,8 +214,9 @@ class VPRModel(pl.LightningModule):
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
         places, _ = batch
+        places = (places.reshape(1, *places.shape), )
         # calculate descriptors
-        descriptors = self(places)
+        descriptors = self(*places)
         return descriptors.detach().cpu()
 
     def validation_epoch_end(self, val_step_outputs):
@@ -221,6 +248,7 @@ class VPRModel(pl.LightningModule):
                                                       )
             del r_list, q_list, feats, num_references, positives
 
+            val_set_name = val_set_name.replace('/', '.')
             self.log(f'{val_set_name}/R1',
                      pitts_dict[1], prog_bar=False, logger=True)
             self.log(f'{val_set_name}/R5',

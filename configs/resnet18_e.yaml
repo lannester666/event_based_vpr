@@ -30,24 +30,72 @@ model:
   miner_name: MultiSimilarityMiner
   miner_margin: 0.1
   faiss_gpu: False
+  bimod: Ture
 data:
   base_path: ''
-  train_anno: /home/steam/dvs/align/train_e.csv
-  query_anno: /home/steam/dvs/align/valid_e.csv
-  ref_anno: /home/steam/dvs/align/ref_e.csv
-  mean_std:
-    mean: 0.5215686274509804
-    std: 0.16511885110320965
+  train_anno: /home/steam/dvs/align/train_ie.csv
+  query_anno: 
+    - /home/steam/dvs/align/valid_e.csv
+  ref_anno: 
+    - /home/steam/dvs/align/ref_e.csv
   batch_size: 15
   img_per_place: 4
   min_img_per_place: 4
   shuffle_all: False
   random_sample_from_each_place: True
-  image_size:
-    - 320
-    - 320
   num_workers: 32
   show_data_stats: True
+  train_transform_e:
+    - 
+      type: resize
+      kwargs:  
+        size:
+          - 320
+          - 320
+    -
+      type: randaug
+      kwargs:
+        num_ops: 3
+    -
+      type: totensor
+    -
+      type: normalize
+      kwargs:
+        mean: 0.5215686274509804
+        std: 0.16511885110320965
+  train_transform:
+    - 
+      type: resize
+      kwargs:  
+        size:
+          - 320
+          - 320
+    -
+      type: randaug
+      kwargs:
+        num_ops: 3
+    -
+      type: totensor
+    -
+      type: normalize
+      kwargs:
+        mean: 0.5215686274509804
+        std: 0.16511885110320965
+  vals_transforms:
+    - 
+      - 
+        type: resize
+        kwargs:  
+          size:
+            - 320
+            - 320
+      -
+        type: totensor
+      -
+        type: normalize
+        kwargs:
+          mean: 0.5215686274509804
+          std: 0.16511885110320965
 trainer:
   accelerator: gpu
   devices:
@@ -55,6 +103,6 @@ trainer:
   num_sanity_val_steps: 0
   precision: 16
   max_epochs: 400
-  check_val_every_n_epoch: 10
+  check_val_every_n_epoch: 1
   reload_dataloaders_every_n_epochs: 1
   log_every_n_steps: 10

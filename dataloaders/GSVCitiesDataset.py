@@ -20,6 +20,7 @@ class GSVCitiesDataset(Dataset):
                  min_img_per_place=4,
                  random_sample_from_each_place=True,
                  transform=default_transform,
+                 transform_e=default_transform,
                  train_anno=None,
                  base_path=None,
                  ):
@@ -34,6 +35,7 @@ class GSVCitiesDataset(Dataset):
         self.min_img_per_place = min_img_per_place
         self.random_sample_from_each_place = random_sample_from_each_place
         self.transform = transform
+        self.transform_e = transform_e
         
         # generate the dataframe contraining images metadata
         self.dataframe = self.__getdataframes(train_anno)
@@ -54,7 +56,10 @@ class GSVCitiesDataset(Dataset):
         # read the first city dataframe
         df = pd.read_csv(train_anno)
         df = df.sample(frac=1)  # shuffle the city dataframe
-        
+        if 'panoid_e' in df.columns:
+            self.bimod = True
+        else:
+            self.bimod = False
         res = df[df.groupby('place_id')['place_id'].transform(
             'size') >= self.min_img_per_place]
         return res.set_index('place_id')
@@ -76,6 +81,7 @@ class GSVCitiesDataset(Dataset):
             place = place[: self.img_per_place]
             
         imgs = []
+        img_e_s = []
         for i, row in place.iterrows():
             img_name = self.get_img_name(row)
             img_path = os.path.join(self.base_path, img_name)
@@ -83,10 +89,21 @@ class GSVCitiesDataset(Dataset):
 
             if self.transform is not None:
                 img = self.transform(img)
+            
+            if self.bimod:
+                img_name = self.get_img_name(row, key='panoid_e')
+                img_path = os.path.join(self.base_path, img_name)
+                img_e = self.image_loader(img_path)
 
+                if self.transform_e is not None:
+                    img_e = self.transform_e(img_e)
+                img_e_s.append(img_e)
             imgs.append(img)
 
-        return torch.stack(imgs), torch.tensor(place_id).repeat(self.img_per_place)
+        if not self.bimod:
+            return torch.stack(imgs), torch.tensor(place_id).repeat(self.img_per_place)
+        else:
+            return torch.stack(imgs), torch.stack(img_e_s), torch.tensor(place_id).repeat(self.img_per_place)
 
     def __len__(self):
         '''Denotes the total number of places (not images)'''
@@ -97,10 +114,8 @@ class GSVCitiesDataset(Dataset):
         return Image.open(path).convert('L')
 
     @staticmethod
-    def get_img_name(row):
-        pl_id = row.name % 10**5  #row.name is the index of the row, not to be confused with image name
-        pl_id = str(pl_id).zfill(7)
-        panoid = row['panoid']
+    def get_img_name(row, key='panoid'):
+        panoid = row[key]
         name = panoid
         return name
 
@@ -113,8 +128,8 @@ class GSVCitiesValDataset(Dataset):
                  transform=default_transform,
                  base_path=None,
                  query_anno=None,
-                 ref_anno=None
-                 ):
+                 ref_anno=None,
+                 key=None):
         super(GSVCitiesValDataset, self).__init__()
         assert base_path is not None, 'you have to provide the base_path of data set'
         self.base_path = base_path
@@ -126,8 +141,10 @@ class GSVCitiesValDataset(Dataset):
         self.random_sample_from_each_place = random_sample_from_each_place
         self.transform = transform
         
-        # generate the dataframe contraining images metadata
-         
+        if key is None:
+            self.key = 'panoid'
+        else:
+            self.key = key 
         self.dataframe = self.__getdataframes(query_anno, ref_anno)
         self.label = self.dataframe['place_id']
         
@@ -156,7 +173,7 @@ class GSVCitiesValDataset(Dataset):
         
         # get the place in form of a dataframe (each row corresponds to one image)
         row = self.dataframe.loc[index]
-        img_name = self.get_img_name(row)
+        img_name = self.get_img_name(row, self.key)
         img_path = os.path.join(self.base_path, img_name)
         img = self.image_loader(img_path)
         if self.transform is not None:
@@ -172,7 +189,7 @@ class GSVCitiesValDataset(Dataset):
         return Image.open(path).convert('L')
 
     @staticmethod
-    def get_img_name(row):
-        panoid = row['panoid']
+    def get_img_name(row, key='panoid'):
+        panoid = row[key]
         name = panoid
         return name
