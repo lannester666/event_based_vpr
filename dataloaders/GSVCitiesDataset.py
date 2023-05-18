@@ -15,9 +15,9 @@ default_transform = T.Compose([
 # NOTE: Hard coded path to dataset folder 
 BASE_PATH = '/home/zty/data/extracted_data/'
 
-if not Path(BASE_PATH).exists():
-    raise FileNotFoundError(
-        'BASE_PATH is hardcoded, please adjust to point to gsv_cities')
+# if not Path(BASE_PATH).exists():
+#     raise FileNotFoundError(
+#         'BASE_PATH is hardcoded, please adjust to point to gsv_cities')
 
 class GSVCitiesDataset(Dataset):
     def __init__(self,
@@ -56,26 +56,26 @@ class GSVCitiesDataset(Dataset):
             for each city in self.cities
         '''
         # read the first city dataframe
-        df = pd.read_csv(self.base_path+'csv/'+f'{self.cities[0]}.csv')
+        df = pd.read_csv('/home/steam/dvs/rpg_e2vid/train.csv')
         df = df.sample(frac=1)  # shuffle the city dataframe
         
 
         # append other cities one by one
-        for i in range(1, len(self.cities)):
-            tmp_df = pd.read_csv(
-                self.base_path+'csv/'+f'{self.cities[i]}.csv')
+        # for i in range(1, len(self.cities)):
+        #     tmp_df = pd.read_csv(
+        #         self.base_path+'csv/'+f'{self.cities[i]}.csv')
 
-            # Now we add a prefix to place_id, so that we
-            # don't confuse, say, place number 13 of NewYork
-            # with place number 13 of London ==> (0000013 and 0500013)
-            # We suppose that there is no city with more than
-            # 99999 images and there won't be more than 99 cities
-            # TODO: rename the dataset and hardcode these prefixes
-            prefix = i
-            tmp_df['place_id'] = tmp_df['place_id'] + (prefix * 10**5)
-            tmp_df = tmp_df.sample(frac=1)  # shuffle the city dataframe
+        #     # Now we add a prefix to place_id, so that we
+        #     # don't confuse, say, place number 13 of NewYork
+        #     # with place number 13 of London ==> (0000013 and 0500013)
+        #     # We suppose that there is no city with more than
+        #     # 99999 images and there won't be more than 99 cities
+        #     # TODO: rename the dataset and hardcode these prefixes
+        #     prefix = i
+        #     tmp_df['place_id'] = tmp_df['place_id'] + (prefix * 10**5)
+        #     tmp_df = tmp_df.sample(frac=1)  # shuffle the city dataframe
             
-            df = pd.concat([df, tmp_df], ignore_index=True)
+        #     df = pd.concat([df, tmp_df], ignore_index=True)
 
         # keep only places depicted by at least min_img_per_place images
         res = df[df.groupby('place_id')['place_id'].transform(
@@ -101,7 +101,7 @@ class GSVCitiesDataset(Dataset):
         imgs = []
         for i, row in place.iterrows():
             img_name = self.get_img_name(row)
-            img_path = self.base_path + img_name
+            img_path = img_name
             img = self.image_loader(img_path)
 
             if self.transform is not None:
@@ -185,8 +185,8 @@ class GSVCitiesValDataset(Dataset):
             for each city in self.cities
         '''
         # read the first city dataframe
-        df_db = pd.read_csv(self.base_path+'csv/'+'validate_data.csv')
-        df_ref = pd.read_csv(self.base_path+'csv/'+'reference_data.csv')
+        df_db = pd.read_csv('/home/steam/dvs/rpg_e2vid/val.csv')
+        df_ref = pd.read_csv('/home/steam/dvs/rpg_e2vid/ref.csv')
         self.num_references = len(df_ref)
         concatenated_df = pd.concat([df_ref, df_db], ignore_index=True, sort=False)
         return concatenated_df
@@ -196,7 +196,7 @@ class GSVCitiesValDataset(Dataset):
         # get the place in form of a dataframe (each row corresponds to one image)
         row = self.dataframe.loc[index]
         img_name = self.get_img_name(row)
-        img_path = self.base_path + img_name
+        img_path = img_name
         img = self.image_loader(img_path)
         if self.transform is not None:
             img = self.transform(img)

@@ -284,8 +284,8 @@ if __name__ == '__main__':
         optimizer='sgd',  # sgd, adamw
         weight_decay=0.001,  # 0.001 for sgd and 0 for adam,
         momentum=0.9,
-        warmpup_steps=650,
-        milestones=[5, 10, 15, 25, 45],
+        warmpup_steps=65,
+        milestones=[50, 100, 150, 250, 450],
         lr_mult=0.3,
 
         # ----- Loss functions
@@ -326,12 +326,12 @@ if __name__ == '__main__':
 
         # ---- Train hyperparameters
         # 0.0002 for adam, 0.05 or sgd (needs to change according to batch size)
-        lr=0.05,
-        optimizer='sgd',  # sgd, adamw
+        lr=0.001,
+        optimizer='adam',  # sgd, adamw
         weight_decay=0.001,  # 0.001 for sgd and 0 for adam,
         momentum=0.9,
-        warmpup_steps=650,
-        milestones=[5, 10, 15, 25, 45],
+        warmpup_steps=65,
+        milestones=[50, 100, 150, 250, 450],
         lr_mult=0.3,
 
         # ----- Loss functions
@@ -370,8 +370,8 @@ if __name__ == '__main__':
 
         num_sanity_val_steps=0,  # runs a validation step before stating training
         precision=16,  # we use half precision to reduce  memory usage
-        max_epochs=800,
-        check_val_every_n_epoch=1,  # run validation every epoch
+        max_epochs=400,
+        check_val_every_n_epoch=100,  # run validation every epoch
         # we only run the checkpointing callback (you can add more)
         callbacks=[checkpoint_cb],
         # we reload the dataset to shuffle the order
