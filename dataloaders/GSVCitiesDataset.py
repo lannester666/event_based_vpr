@@ -1,4 +1,5 @@
 # https://github.com/amaralibey/gsv-cities
+import os
 
 import pandas as pd
 from pathlib import Path
@@ -12,25 +13,20 @@ default_transform = T.Compose([
     T.Normalize(mean=[0.485], std=[0.229]),
 ])
 
-# NOTE: Hard coded path to dataset folder 
-BASE_PATH = '/home/zty/data/extracted_data/'
-
-# if not Path(BASE_PATH).exists():
-#     raise FileNotFoundError(
-#         'BASE_PATH is hardcoded, please adjust to point to gsv_cities')
 
 class GSVCitiesDataset(Dataset):
     def __init__(self,
-                 cities=['London', 'Boston'],
                  img_per_place=5,
                  min_img_per_place=4,
                  random_sample_from_each_place=True,
                  transform=default_transform,
-                 base_path=BASE_PATH
+                 train_anno=None,
+                 base_path=None,
                  ):
         super(GSVCitiesDataset, self).__init__()
+        assert base_path is not None, 'you have to provide the base_path of data set'
+        assert train_anno is not None, 'you have to provide the train list'
         self.base_path = base_path
-        self.cities = cities
 
         assert img_per_place <= min_img_per_place, \
             f"img_per_place should be less than {min_img_per_place}"
@@ -40,13 +36,13 @@ class GSVCitiesDataset(Dataset):
         self.transform = transform
         
         # generate the dataframe contraining images metadata
-        self.dataframe = self.__getdataframes()
+        self.dataframe = self.__getdataframes(train_anno)
         
         # get all unique place ids
         self.places_ids = pd.unique(self.dataframe.index)
         self.total_nb_images = len(self.dataframe)
         
-    def __getdataframes(self):
+    def __getdataframes(self, train_anno):
         ''' 
             Return one dataframe containing
             all info about the images from all cities
@@ -56,28 +52,9 @@ class GSVCitiesDataset(Dataset):
             for each city in self.cities
         '''
         # read the first city dataframe
-        df = pd.read_csv('/home/steam/dvs/rpg_e2vid/train.csv')
+        df = pd.read_csv(train_anno)
         df = df.sample(frac=1)  # shuffle the city dataframe
         
-
-        # append other cities one by one
-        # for i in range(1, len(self.cities)):
-        #     tmp_df = pd.read_csv(
-        #         self.base_path+'csv/'+f'{self.cities[i]}.csv')
-
-        #     # Now we add a prefix to place_id, so that we
-        #     # don't confuse, say, place number 13 of NewYork
-        #     # with place number 13 of London ==> (0000013 and 0500013)
-        #     # We suppose that there is no city with more than
-        #     # 99999 images and there won't be more than 99 cities
-        #     # TODO: rename the dataset and hardcode these prefixes
-        #     prefix = i
-        #     tmp_df['place_id'] = tmp_df['place_id'] + (prefix * 10**5)
-        #     tmp_df = tmp_df.sample(frac=1)  # shuffle the city dataframe
-            
-        #     df = pd.concat([df, tmp_df], ignore_index=True)
-
-        # keep only places depicted by at least min_img_per_place images
         res = df[df.groupby('place_id')['place_id'].transform(
             'size') >= self.min_img_per_place]
         return res.set_index('place_id')
@@ -101,7 +78,7 @@ class GSVCitiesDataset(Dataset):
         imgs = []
         for i, row in place.iterrows():
             img_name = self.get_img_name(row)
-            img_path = img_name
+            img_path = os.path.join(self.base_path, img_name)
             img = self.image_loader(img_path)
 
             if self.transform is not None:
@@ -109,10 +86,6 @@ class GSVCitiesDataset(Dataset):
 
             imgs.append(img)
 
-        # NOTE: contrary to image classification where __getitem__ returns only one image 
-        # in GSVCities, we return a place, which is a Tesor of K images (K=self.img_per_place)
-        # this will return a Tensor of shape [K, channels, height, width]. This needs to be taken into account 
-        # in the Dataloader (which will yield batches of shape [BS, K, channels, height, width])
         return torch.stack(imgs), torch.tensor(place_id).repeat(self.img_per_place)
 
     def __len__(self):
@@ -125,38 +98,26 @@ class GSVCitiesDataset(Dataset):
 
     @staticmethod
     def get_img_name(row):
-        # given a row from the dataframe
-        # return the corresponding image name
-
-        city = row['city_id']
-        
-        # now remove the two digit we added to the id
-        # they are superficially added to make ids different
-        # for different cities
         pl_id = row.name % 10**5  #row.name is the index of the row, not to be confused with image name
         pl_id = str(pl_id).zfill(7)
-        
         panoid = row['panoid']
-        year = str(row['year']).zfill(4)
-        month = str(row['month']).zfill(2)
-        northdeg = str(row['northdeg']).zfill(3)
-        lat, lon = str(row['lat']), str(row['lon'])
         name = panoid
         return name
 
 
 class GSVCitiesValDataset(Dataset):
     def __init__(self,
-                 cities=['London', 'Boston'],
                  img_per_place=4,
                  min_img_per_place=4,
                  random_sample_from_each_place=True,
                  transform=default_transform,
-                 base_path=BASE_PATH
+                 base_path=None,
+                 query_anno=None,
+                 ref_anno=None
                  ):
         super(GSVCitiesValDataset, self).__init__()
+        assert base_path is not None, 'you have to provide the base_path of data set'
         self.base_path = base_path
-        self.cities = cities
 
         assert img_per_place <= min_img_per_place, \
             f"img_per_place should be less than {min_img_per_place}"
@@ -167,7 +128,7 @@ class GSVCitiesValDataset(Dataset):
         
         # generate the dataframe contraining images metadata
          
-        self.dataframe = self.__getdataframes()
+        self.dataframe = self.__getdataframes(query_anno, ref_anno)
         self.label = self.dataframe['place_id']
         
         # get all unique place ids
@@ -175,7 +136,7 @@ class GSVCitiesValDataset(Dataset):
         self.total_nb_images = len(self.dataframe)
         
         
-    def __getdataframes(self):
+    def __getdataframes(self, query_anno, ref_anno):
         ''' 
             Return one dataframe containing
             all info about the images from all cities
@@ -185,8 +146,8 @@ class GSVCitiesValDataset(Dataset):
             for each city in self.cities
         '''
         # read the first city dataframe
-        df_db = pd.read_csv('/home/steam/dvs/rpg_e2vid/val.csv')
-        df_ref = pd.read_csv('/home/steam/dvs/rpg_e2vid/ref.csv')
+        df_db = pd.read_csv(query_anno)
+        df_ref = pd.read_csv(ref_anno)
         self.num_references = len(df_ref)
         concatenated_df = pd.concat([df_ref, df_db], ignore_index=True, sort=False)
         return concatenated_df
@@ -196,7 +157,7 @@ class GSVCitiesValDataset(Dataset):
         # get the place in form of a dataframe (each row corresponds to one image)
         row = self.dataframe.loc[index]
         img_name = self.get_img_name(row)
-        img_path = img_name
+        img_path = os.path.join(self.base_path, img_name)
         img = self.image_loader(img_path)
         if self.transform is not None:
             img = self.transform(img)
@@ -212,19 +173,6 @@ class GSVCitiesValDataset(Dataset):
 
     @staticmethod
     def get_img_name(row):
-        # given a row from the dataframe
-        # return the corresponding image name
-
-        city = row['city_id']
-        
-        # now remove the two digit we added to the id
-        # they are superficially added to make ids different
-        # for different cities
-        
         panoid = row['panoid']
-        year = str(row['year']).zfill(4)
-        month = str(row['month']).zfill(2)
-        northdeg = str(row['northdeg']).zfill(3)
-        lat, lon = str(row['lat']), str(row['lon'])
         name = panoid
         return name

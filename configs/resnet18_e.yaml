@@ -1,0 +1,60 @@
+seed: 1001
+model:
+  backbone_arch: resnet18
+  pretrained: True
+  layers_to_freeze: 2
+  layers_to_crop:
+    - 4
+  agg_arch: MixVPR
+  agg_config:
+    in_channels: 256
+    in_h: 20
+    in_w: 20
+    out_channels: 256
+    mix_depth: 4
+    mlp_ratio: 1
+    out_rows: 4
+  lr: 0.001
+  optimizer: adam 
+  weight_decay: 0.001
+  momentum: 0.9
+  warmpup_steps: 65
+  milestones:
+    - 50
+    - 100
+    - 150
+    - 250 
+    - 300
+  lr_mult: 0.3
+  loss_name: MultiSimilarityLoss
+  miner_name: MultiSimilarityMiner
+  miner_margin: 0.1
+  faiss_gpu: False
+data:
+  base_path: ''
+  train_anno: /home/steam/dvs/align/train_e.csv
+  query_anno: /home/steam/dvs/align/valid_e.csv
+  ref_anno: /home/steam/dvs/align/ref_e.csv
+  mean_std:
+    mean: 0.5215686274509804
+    std: 0.16511885110320965
+  batch_size: 15
+  img_per_place: 4
+  min_img_per_place: 4
+  shuffle_all: False
+  random_sample_from_each_place: True
+  image_size:
+    - 320
+    - 320
+  num_workers: 32
+  show_data_stats: True
+trainer:
+  accelerator: gpu
+  devices:
+    - 0
+  num_sanity_val_steps: 0
+  precision: 16
+  max_epochs: 400
+  check_val_every_n_epoch: 10
+  reload_dataloaders_every_n_epochs: 1
+  log_every_n_steps: 10
