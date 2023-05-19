@@ -31,9 +31,10 @@ model:
   miner_margin: 0.1
   faiss_gpu: False
   bimod: Ture
+  one4two: True
 data:
   base_path: ''
-  train_anno: /home/steam/dvs/align/bimod/train_e.csv
+  train_anno: /home/steam/dvs/align/bimod/train_ie.csv
   query_anno: 
     - /home/steam/dvs/align/bimod/valid_e.csv
     - /home/steam/dvs/align/bimod/valid_i.csv
