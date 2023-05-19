@@ -270,16 +270,19 @@ def yaml2config(fn):
     model_config = config['model']
     trainer_config = config['trainer']
     return datamodule_config, model_config, trainer_config, seed
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('parser for vpr of CS284')
     parser.add_argument('--config', required=True, type=str)
     args = parser.parse_args()
     datamodule_config, model_config, trainer_config, seed = yaml2config(args.config)
     pl.utilities.seed.seed_everything(seed=seed, workers=True)
-
     datamodule = GSVCitiesDataModule(**datamodule_config)
     model = VPRModel(**model_config)
-    mlf_logger = MLFlowLogger(experiment_name="lightning_logs", tracking_uri="file:./mlruns")
+    mlf_logger = MLFlowLogger(experiment_name="mixvpr", tracking_uri="file:./mlruns")
+    mlflow.start_run(run_id=mlf_logger.run_id)
+    mlflow.log_artifact(args.config)
+    mlflow.end_run()
     trainer_config.update({'logger': mlf_logger})
     trainer = pl.Trainer(**trainer_config)
     trainer.fit(model=model, datamodule=datamodule)
