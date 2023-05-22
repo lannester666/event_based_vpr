@@ -31,9 +31,10 @@ model:
   miner_margin: 0.1
   faiss_gpu: False
   bimod: Ture
+  load_from_ckpt: ['/home/steam/dvs/align/event_based_vpr/ckpts/configs/resnet18_i.yaml-v5.ckpt', '/home/steam/dvs/align/event_based_vpr/ckpts/configs/resnet18_e_original.yaml-v2.ckpt']
 data:
   base_path: ''
-  train_anno: /home/steam/dvs/align/bimod/train_e.csv
+  train_anno: /home/steam/dvs/align/bimod/train_e_origin.csv
   query_anno: 
     - /home/steam/dvs/align/bimod/valid_e.csv
     - /home/steam/dvs/align/bimod/valid_i.csv
@@ -134,7 +135,8 @@ trainer:
     - 0
   num_sanity_val_steps: 0
   precision: 16
-  max_epochs: 400
-  check_val_every_n_epoch: 100
+  max_epochs: 1
+  check_val_every_n_epoch: 1
   reload_dataloaders_every_n_epochs: 1
   log_every_n_steps: 10
+  inference_mode: True

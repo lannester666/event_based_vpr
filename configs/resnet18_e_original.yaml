@@ -33,7 +33,7 @@ model:
   bimod: Ture
 data:
   base_path: ''
-  train_anno: /home/steam/dvs/align/bimod/train_e.csv
+  train_anno: /home/steam/dvs/align/bimod/train_e_origin.csv
   query_anno: 
     - /home/steam/dvs/align/bimod/valid_e.csv
     - /home/steam/dvs/align/bimod/valid_i.csv
@@ -138,3 +138,4 @@ trainer:
   check_val_every_n_epoch: 100
   reload_dataloaders_every_n_epochs: 1
   log_every_n_steps: 10
+  inference_mode: False

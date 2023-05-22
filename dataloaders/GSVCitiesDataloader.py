@@ -61,7 +61,7 @@ class GSVCitiesDataModule(pl.LightningDataModule):
         self.query_anno = query_anno
         self.ref_anno = ref_anno
         self.base_path = base_path
-
+        # import pdb; pdb.set_trace()
         assert len(query_anno) == len(vals_transforms) == len(ref_anno), 'data not match with transform'
         self.train_transform = build_transform_compose(train_transform)
         self.train_transform_e = build_transform_compose(train_transform_e)

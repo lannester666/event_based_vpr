@@ -33,7 +33,7 @@ model:
   bimod: Ture
 data:
   base_path: ''
-  train_anno: /home/steam/dvs/align/bimod/train_e.csv
+  train_anno: /home/steam/dvs/bimod/train_e_denoise.csv
   query_anno: 
     - /home/steam/dvs/align/bimod/valid_e.csv
     - /home/steam/dvs/align/bimod/valid_i.csv

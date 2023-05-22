@@ -38,9 +38,11 @@ data:
   query_anno: 
     - /home/steam/dvs/align/bimod/valid_e.csv
     - /home/steam/dvs/align/bimod/valid_i.csv
+    - /home/steam/dvs/align/bimod/valid_e_origin.csv
   ref_anno: 
     - /home/steam/dvs/align/bimod/ref_e.csv
     - /home/steam/dvs/align/bimod/ref_i.csv
+    - /home/steam/dvs/align/bimod/ref_e_origin.csv
   batch_size: 15
   img_per_place: 4
   min_img_per_place: 4
@@ -113,6 +115,20 @@ data:
         kwargs:
           mean: 0.5215686274509804
           std: 0.16511885110320965
+    - 
+      - 
+        type: resize
+        kwargs:  
+          size:
+            - 320
+            - 320
+      -
+        type: totensor
+      -
+        type: normalize
+        kwargs:
+          mean: 0.5215686274509804
+          std: 0.16511885110320965
 trainer:
   accelerator: gpu
   devices:
@@ -120,6 +136,6 @@ trainer:
   num_sanity_val_steps: 0
   precision: 16
   max_epochs: 400
-  check_val_every_n_epoch: 1
+  check_val_every_n_epoch: 100
   reload_dataloaders_every_n_epochs: 1
   log_every_n_steps: 10

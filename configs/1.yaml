@@ -31,17 +31,17 @@ model:
   miner_margin: 0.1
   faiss_gpu: False
   bimod: Ture
+  one4two: True
+  load_from_ckpt: ['/home/steam/dvs/align/event_based_vpr/ckpts/configs/resnet18_i.yaml-v2.ckpt', '/home/steam/dvs/align/event_based_vpr/ckpts/configs/resnet18_e.yaml-v1.ckpt']
 data:
   base_path: ''
-  train_anno: /home/steam/dvs/align/bimod/train_e.csv
+  train_anno: /home/steam/dvs/align/bimod/train_ie.csv
   query_anno: 
     - /home/steam/dvs/align/bimod/valid_e.csv
     - /home/steam/dvs/align/bimod/valid_i.csv
-    - /home/steam/dvs/align/bimod/valid_e_origin.csv
   ref_anno: 
     - /home/steam/dvs/align/bimod/ref_e.csv
     - /home/steam/dvs/align/bimod/ref_i.csv
-    - /home/steam/dvs/align/bimod/ref_e_origin.csv
   batch_size: 15
   img_per_place: 4
   min_img_per_place: 4
@@ -114,24 +114,10 @@ data:
         kwargs:
           mean: 0.5215686274509804
           std: 0.16511885110320965
-    - 
-      - 
-        type: resize
-        kwargs:  
-          size:
-            - 320
-            - 320
-      -
-        type: totensor
-      -
-        type: normalize
-        kwargs:
-          mean: 0.5215686274509804
-          std: 0.16511885110320965
 trainer:
   accelerator: gpu
   devices:
-    - 0
+    - 1
   num_sanity_val_steps: 0
   precision: 16
   max_epochs: 400

@@ -3,3 +3,4 @@ __pycache__
 LOGS
 .vscode
 mlruns
+*ckpt

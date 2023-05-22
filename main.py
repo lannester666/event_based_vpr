@@ -48,7 +48,8 @@ class VPRModel(pl.LightningModule):
                  miner_margin=0.1,
                  faiss_gpu=False,
                  one4two=False,
-                 bimod=False
+                 bimod=False,
+                 load_from_ckpt=[],
                  ):
         super().__init__()
         self.encoder_arch = backbone_arch
@@ -85,6 +86,10 @@ class VPRModel(pl.LightningModule):
         else:
             self.model_i = self.build_model(backbone_arch, pretrained, layers_to_freeze, layers_to_crop, agg_arch, agg_config)
             self.model_e = self.model_i
+        if load_from_ckpt:
+            self.model_i = self.load_from_checkpoint(load_from_ckpt[0]).model_i
+            # import pdb; pdb.set_trace()
+            self.model_e = self.load_from_checkpoint(load_from_ckpt[1]).model_e
         # ----------------------------------
         # get the backbone and the aggregator
        
@@ -213,10 +218,13 @@ class VPRModel(pl.LightningModule):
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
+        import time
+        t1 = time.time()
         places, _ = batch
         # calculate descriptors
         descriptors = self.model_i(places) + self.model_e(places)
         descriptors /= 2
+        print(time.time() - t1)
         return descriptors.detach().cpu()
 
     def validation_epoch_end(self, val_step_outputs):
@@ -237,7 +245,7 @@ class VPRModel(pl.LightningModule):
             positives = val_dataset.label
             r_list = feats[: num_references]
             q_list = feats[num_references:]
-            pitts_dict = utils.get_validation_recalls(r_list=r_list,
+            pitts_dict, precision = utils.get_validation_recalls(r_list=r_list,
                                                       q_list=q_list,
                                                       k_values=[
                                                           1, 5, 10, 15, 20, 50, 100],
@@ -255,6 +263,7 @@ class VPRModel(pl.LightningModule):
                      pitts_dict[5], prog_bar=False, logger=True)
             self.log(f'{val_set_name}/R10',
                      pitts_dict[10], prog_bar=False, logger=True)
+            self.log(f'{val_set_name}/P1',precision, prog_bar=False, logger=True)
         print('\n\n')
 
 
@@ -274,11 +283,26 @@ def yaml2config(fn):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('parser for vpr of CS284')
     parser.add_argument('--config', required=True, type=str)
+    parser.add_argument('--generalize', action='store_true')
     args = parser.parse_args()
     datamodule_config, model_config, trainer_config, seed = yaml2config(args.config)
+    # import pdb; pdb.set_trace()
     pl.utilities.seed.seed_everything(seed=seed, workers=True)
     datamodule = GSVCitiesDataModule(**datamodule_config)
-    model = VPRModel(**model_config)
+    if args.generalize:
+        model = VPRModel.load_from_checkpoint()
+        model.eval()
+    else: 
+        model = VPRModel(**model_config)
+    checkpoint_cb = ModelCheckpoint(
+        dirpath='./ckpts/',
+        filename=f'{args.config}',
+        save_last=True,
+        auto_insert_metric_name=False,
+        save_weights_only=True,
+        save_top_k=1,
+        mode='max',)
+    trainer_config['callbacks'] = [checkpoint_cb]
     mlf_logger = MLFlowLogger(experiment_name="mixvpr", tracking_uri="file:./mlruns")
     mlflow.start_run(run_id=mlf_logger.run_id)
     mlflow.log_artifact(args.config)
